@@ -25,7 +25,7 @@ export default function Home() {
         } else {
           setError(data.error || "Failed to fetch price");
         }
-      } catch (err) {
+      } catch {
         setError("Failed to fetch price");
       }
     };

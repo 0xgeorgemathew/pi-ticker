@@ -11,7 +11,7 @@ export const PriceSlider = ({ pages }: { pages: Page[] }) => {
   useEffect(() => {
     const interval = setInterval(() => {
       setCurrentIndex((prevIndex) => (prevIndex + 1) % pages.length);
-    }, 5000); // Rotate every 10 seconds
+    }, 3000); // Rotate
 
     return () => clearInterval(interval);
   }, [pages.length]);

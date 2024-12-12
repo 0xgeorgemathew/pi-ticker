@@ -5,7 +5,7 @@ import { useState, useEffect, useCallback } from "react";
 import { Contract, WebSocketProvider, JsonRpcProvider } from "ethers";
 import { PriceDisplay } from "@/app/components/PriceDisplay";
 
-// Uniswap V3 ETH/USDC Pool Contract (Ethereum Mainnet)
+// Uniswap V3 ETH/USDC Pool Contract (Ethereum)
 const POOL_ADDRESS = "0x88e6A0c2dDD26FEEb64F039a2c41296FcB3f5640";
 
 // Minimal ABI for the pool contract

@@ -52,15 +52,15 @@ export default function WbtcUsdtPrice() {
         process.env.NEXT_PUBLIC_HTTP_RPC_URL || "https://your-http-url"
       );
 
-      console.log("Created HTTP provider");
+      // console.log("Created HTTP provider");
       const initialPool = new Contract(POOL_ADDRESS, POOL_ABI, httpProvider);
 
-      console.log("BTC Pool Fetching slot0 data...");
+      // console.log("BTC Pool Fetching slot0 data...");
       const slot0 = await initialPool.slot0();
-      console.log(" BTC Pool Slot0 data:", slot0);
+      // console.log(" BTC Pool Slot0 data:", slot0);
 
       const initialPrice = calculatePrice(slot0.sqrtPriceX96);
-      console.log(" BTC Pool Initial price:", initialPrice);
+      // console.log(" BTC Pool Initial price:", initialPrice);
 
       setPrice(initialPrice);
       setLastUpdate(new Date());
@@ -105,10 +105,10 @@ export default function WbtcUsdtPrice() {
 
       // Listen for Swap events
       pool.on("Swap", (...args) => {
-        console.log("WBTC Swap event received:", args);
+        // console.log("WBTC Swap event received:", args);
         const sqrtPriceX96 = args[4];
         const newPrice = calculatePrice(sqrtPriceX96);
-        console.log("New WBTC price from swap:", newPrice);
+        // console.log("New WBTC price from swap:", newPrice);
         setPrice(newPrice);
         setLastUpdate(new Date());
       });

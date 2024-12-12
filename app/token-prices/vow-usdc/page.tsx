@@ -6,25 +6,24 @@ import { Contract, WebSocketProvider, JsonRpcProvider } from "ethers";
 import { PriceDisplay } from "@/app/components/PriceDisplay";
 
 // Uniswap V3 ETH/USDC Pool Contract (Ethereum)
-const POOL_ADDRESS = "0x610E319b3A3Ab56A0eD5562927D37c233774ba39";
+const POOL_ADDRESS = "0x1e49768714e438e789047f48fd386686a5707db2";
 
 // Minimal ABI for the pool contract
 const POOL_ABI = [
-  "event Swap(address indexed sender, address indexed recipient, int256 amount0, int256 amount1, uint160 sqrtPriceX96, uint128 liquidity, int24 tick)",
-  "function slot0() external view returns (uint160 sqrtPriceX96, int24 tick, uint16 observationIndex, uint16 observationCardinality, uint16 observationCardinalityNext, uint8 feeProtocol, bool unlocked)",
+  "event Sync(uint112 reserve0, uint112 reserve1)",
+  "function getReserves() external view returns (uint112 reserve0, uint112 reserve1, uint32 blockTimestampLast)",
 ];
 
 // Helper function to calculate price from sqrtPriceX96
-function calculatePrice(sqrtPriceX96: bigint): number {
-  const decimalsToken0: number = 18; // USDC decimals
-  const decimalsToken1: number = 6; // ETH decimals
-  const Q192 = 2n ** 192n;
+function calculatePrice(reserve0: bigint, reserve1: bigint): number {
+  const decimalsToken0: number = 18; // VOW decimals
+  const decimalsToken1: number = 6; // USDT decimals
+  // const Q192 = 2n ** 192n;
 
-  const numerator = sqrtPriceX96 * sqrtPriceX96;
-  const rawPrice = Number(numerator) / Number(Q192);
+  const rawPrice = Number(reserve1) / Number(reserve0);
   const decimalAdjustment = decimalsToken0 - decimalsToken1;
   const price = rawPrice * Math.pow(10, decimalAdjustment);
-  // const priceUsdcPerWld = 1 / price;
+  // const priceUsdcPerEth = 1 / price;
 
   // Raw price as a floating number (token1/token0)
 
@@ -39,7 +38,7 @@ function calculatePrice(sqrtPriceX96: bigint): number {
 
 const RECONNECT_DELAY = 5000; // 5 seconds
 
-export default function WldUsdcPrice() {
+export default function VowUsdcPrice() {
   const [price, setPrice] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
@@ -49,18 +48,18 @@ export default function WldUsdcPrice() {
     try {
       console.log("Fetching initial price...");
       const httpProvider = new JsonRpcProvider(
-        process.env.NEXT_PUBLIC_HTTP_RPC_URL_WLD || "https://your-http-url"
+        process.env.NEXT_PUBLIC_HTTP_RPC_URL_2 || "https://your-http-url"
       );
 
-      // console.log("Created HTTP provider");
+      console.log("Created HTTP provider");
+      console.log("HttpProvider", httpProvider);
       const initialPool = new Contract(POOL_ADDRESS, POOL_ABI, httpProvider);
 
-      // console.log("Fetching slot0 data...");
-      const slot0 = await initialPool.slot0();
-      // console.log("Slot0 data:", slot0);
-
-      const initialPrice = calculatePrice(slot0.sqrtPriceX96);
-      // console.log("Initial price:", initialPrice);
+      console.log("Fetching reserve data...");
+      const reserves = await initialPool.getReserves();
+      console.log("Reserve data:", reserves);
+      const initialPrice = calculatePrice(reserves.reserve0, reserves.reserve1);
+      console.log("Initial price:", initialPrice);
 
       setPrice(initialPrice);
       setLastUpdate(new Date());
@@ -80,7 +79,7 @@ export default function WldUsdcPrice() {
     try {
       console.log("Setting up WebSocket connection...");
       wsProvider = new WebSocketProvider(
-        process.env.NEXT_PUBLIC_WS_RPC_URL_WLD || "ws://your-websocket-url"
+        process.env.NEXT_PUBLIC_WS_RPC_URL_2 || "ws://your-websocket-url"
       );
 
       // Monitor connection status through provider events
@@ -104,11 +103,11 @@ export default function WldUsdcPrice() {
       console.log("Contract instance created");
 
       // Listen for Swap events
-      pool.on("Swap", (...args) => {
-        // console.log("WLD Swap event received:", args);
-        const sqrtPriceX96 = args[4];
-        const newPrice = calculatePrice(sqrtPriceX96);
-        // console.log("New WLD price from swap:", newPrice);
+      pool.on("Sync", (...args) => {
+        console.log("VOW Swap event received:", args);
+        const sync = args[1];
+        const newPrice = calculatePrice(sync.reserve0, sync.reserve1);
+        console.log("New VOW price from swap:", newPrice);
         setPrice(newPrice);
         setLastUpdate(new Date());
       });
@@ -178,7 +177,7 @@ export default function WldUsdcPrice() {
 
   return (
     <PriceDisplay
-      title="Worldcoin"
+      title="VOW"
       price={price}
       lastUpdate={lastUpdate}
       isConnected={isConnected}

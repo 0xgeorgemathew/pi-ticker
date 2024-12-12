@@ -1,12 +1,12 @@
-// app/token-prices/wbtc-usdt/page.tsx
+// app/token-prices/eth-usdc/page.tsx
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
 import { Contract, WebSocketProvider, JsonRpcProvider } from "ethers";
 import { PriceDisplay } from "@/app/components/PriceDisplay";
 
-// Uniswap V3 BTC/USDC Pool Contract (Ethereum Mainnet)
-const POOL_ADDRESS = "0x9Db9e0e53058C89e5B94e29621a205198648425B";
+// Uniswap V3 ETH/USDC Pool Contract (Ethereum)
+const POOL_ADDRESS = "0x610E319b3A3Ab56A0eD5562927D37c233774ba39";
 
 // Minimal ABI for the pool contract
 const POOL_ABI = [
@@ -16,30 +16,30 @@ const POOL_ABI = [
 
 // Helper function to calculate price from sqrtPriceX96
 function calculatePrice(sqrtPriceX96: bigint): number {
-  const decimalsToken0: number = 8; // WBTC decimals
-  const decimalsToken1: number = 6; // USDT decimals
+  const decimalsToken0: number = 18; // USDC decimals
+  const decimalsToken1: number = 6; // ETH decimals
   const Q192 = 2n ** 192n;
 
-  // Calculate price = (sqrtPrice * sqrtPrice) / (2^192)
   const numerator = sqrtPriceX96 * sqrtPriceX96;
   const rawPrice = Number(numerator) / Number(Q192);
-  const decimalAdjustment = decimalsToken1 - decimalsToken0; // 6 - 8 = -2
-  const price = rawPrice * Math.pow(10, -decimalAdjustment); // Multiply by 10^2
+  const decimalAdjustment = decimalsToken0 - decimalsToken1;
+  const price = rawPrice * Math.pow(10, decimalAdjustment);
+  // const priceUsdcPerWld = 1 / price;
 
-  // For WBTC/USDT pair:
-  // Need to adjust by the difference in decimals
-  // If raw price is in terms of smallest units, we adjust by (token1decimals - token0decimals)
+  // Raw price as a floating number (token1/token0)
 
-  console.log("BTC Pool Raw price (token1/token0):", rawPrice);
-  console.log("Decimal adjustment:", decimalAdjustment);
-  console.log("Final USDT per WBTC price:", price);
+  // Adjust for token decimals
+
+  //   console.log("Raw price (token1/token0):", rawPrice);
+  //   console.log("Human-readable price (token1/token0):", humanPrice);
+  //   console.log("Price (USDC per ETH):", priceUsdcPerEth);
 
   return price;
 }
 
 const RECONNECT_DELAY = 5000; // 5 seconds
 
-export default function WbtcUsdtPrice() {
+export default function WldUsdcPrice() {
   const [price, setPrice] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
@@ -49,18 +49,18 @@ export default function WbtcUsdtPrice() {
     try {
       console.log("Fetching initial price...");
       const httpProvider = new JsonRpcProvider(
-        process.env.NEXT_PUBLIC_HTTP_RPC_URL || "https://your-http-url"
+        process.env.NEXT_PUBLIC_HTTP_RPC_URL_WLD || "https://your-http-url"
       );
 
       console.log("Created HTTP provider");
       const initialPool = new Contract(POOL_ADDRESS, POOL_ABI, httpProvider);
 
-      console.log("BTC Pool Fetching slot0 data...");
+      console.log("Fetching slot0 data...");
       const slot0 = await initialPool.slot0();
-      console.log(" BTC Pool Slot0 data:", slot0);
+      console.log("Slot0 data:", slot0);
 
       const initialPrice = calculatePrice(slot0.sqrtPriceX96);
-      console.log(" BTC Pool Initial price:", initialPrice);
+      console.log("Initial price:", initialPrice);
 
       setPrice(initialPrice);
       setLastUpdate(new Date());
@@ -80,7 +80,7 @@ export default function WbtcUsdtPrice() {
     try {
       console.log("Setting up WebSocket connection...");
       wsProvider = new WebSocketProvider(
-        process.env.NEXT_PUBLIC_WS_RPC_URL || "ws://your-websocket-url"
+        process.env.NEXT_PUBLIC_WS_RPC_URL_WLD || "ws://your-websocket-url"
       );
 
       // Monitor connection status through provider events
@@ -105,10 +105,10 @@ export default function WbtcUsdtPrice() {
 
       // Listen for Swap events
       pool.on("Swap", (...args) => {
-        console.log("WBTC Swap event received:", args);
+        console.log("WLD Swap event received:", args);
         const sqrtPriceX96 = args[4];
         const newPrice = calculatePrice(sqrtPriceX96);
-        console.log("New WBTC price from swap:", newPrice);
+        console.log("New WLD price from swap:", newPrice);
         setPrice(newPrice);
         setLastUpdate(new Date());
       });
@@ -178,7 +178,7 @@ export default function WbtcUsdtPrice() {
 
   return (
     <PriceDisplay
-      title="Bitcoin"
+      title="Worldcoin"
       price={price}
       lastUpdate={lastUpdate}
       isConnected={isConnected}

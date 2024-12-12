@@ -178,7 +178,7 @@ export default function EthUsdcPrice() {
 
   return (
     <PriceDisplay
-      title="ETH/USDC"
+      title="Ethereum"
       price={price}
       lastUpdate={lastUpdate}
       isConnected={isConnected}

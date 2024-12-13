@@ -40,7 +40,7 @@ export const PriceSlider = ({
 
   useEffect(() => {
     if (!isPlaying) return;
-    const interval = setInterval(handleNext, 13000);
+    const interval = setInterval(handleNext, 2000);
     return () => clearInterval(interval);
   }, [isPlaying, handleNext]);
 

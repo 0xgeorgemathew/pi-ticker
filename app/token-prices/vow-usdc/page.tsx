@@ -2,8 +2,13 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { Contract, WebSocketProvider, JsonRpcProvider } from "ethers";
-import { PriceDisplay } from "@/app/components/PriceDisplay";
+import {
+  Contract,
+  WebSocketProvider,
+  JsonRpcProvider,
+  formatUnits,
+} from "ethers";
+import { PriceDisplay } from "@/app/components/vow/PriceDisplay"; // Import PriceDisplay";
 
 // Uniswap V3 ETH/USDC Pool Contract (Ethereum)
 const POOL_ADDRESS = "0x1e49768714e438e789047f48fd386686a5707db2";
@@ -12,6 +17,7 @@ const POOL_ADDRESS = "0x1e49768714e438e789047f48fd386686a5707db2";
 const POOL_ABI = [
   "event Sync(uint112 reserve0, uint112 reserve1)",
   "function getReserves() external view returns (uint112 reserve0, uint112 reserve1, uint32 blockTimestampLast)",
+  "event Swap(address indexed sender,uint amount0In,uint amount1In,uint amount0Out,uint amount1Out,address indexed to)",
 ];
 
 // Helper function to calculate price from sqrtPriceX96
@@ -35,24 +41,30 @@ function calculatePrice(reserve0: bigint, reserve1: bigint): number {
 
   return price;
 }
-
+interface Transaction {
+  id: string;
+  type: "BUY" | "SELL";
+  vowAmount: number;
+  usdtAmount: number;
+  timestamp: string;
+}
 const RECONNECT_DELAY = 5000; // 5 seconds
+const MAX_TRANSACTIONS = 10; // Maximum number of transactions to store
 
 export default function VowUsdcPrice() {
   const [price, setPrice] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
   const [isConnected, setIsConnected] = useState(false);
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
 
   const fetchInitialPrice = async () => {
     try {
       console.log("Fetching initial price...");
-      const httpProvider = new JsonRpcProvider(
-        process.env.NEXT_PUBLIC_HTTP_RPC_URL_2 || "https://your-http-url"
-      );
+      const response = await fetch("/api/rpc-url");
+      const { httpUrl } = await response.json();
+      const httpProvider = new JsonRpcProvider(httpUrl);
 
-      console.log("Created HTTP provider");
-      console.log("HttpProvider", httpProvider);
       const initialPool = new Contract(POOL_ADDRESS, POOL_ABI, httpProvider);
 
       console.log("Fetching reserve data...");
@@ -78,10 +90,9 @@ export default function VowUsdcPrice() {
 
     try {
       console.log("Setting up WebSocket connection...");
-      wsProvider = new WebSocketProvider(
-        process.env.NEXT_PUBLIC_WS_RPC_URL_2 || "ws://your-websocket-url"
-      );
-
+      const response = await fetch("/api/rpc-url");
+      const { wsUrl } = await response.json();
+      wsProvider = new WebSocketProvider(wsUrl);
       // Monitor connection status through provider events
       wsProvider.on("network", (newNetwork, oldNetwork) => {
         if (!oldNetwork) {
@@ -101,16 +112,47 @@ export default function VowUsdcPrice() {
       // Setup contract and event listening
       pool = new Contract(POOL_ADDRESS, POOL_ABI, wsProvider);
       console.log("Contract instance created");
-
-      // Listen for Swap events
-      pool.on("Sync", (...args) => {
-        console.log("VOW Swap event received:", args);
-        const sync = args[1];
-        const newPrice = calculatePrice(sync.reserve0, sync.reserve1);
-        console.log("New VOW price from swap:", newPrice);
+      //  "event Swap(address indexed sender,uint amount0In,uint amount1In,uint amount0Out,uint amount1Out,address indexed to)",
+      pool.on("Sync", (reserve0: bigint, reserve1: bigint) => {
+        const newPrice = calculatePrice(reserve0, reserve1);
         setPrice(newPrice);
         setLastUpdate(new Date());
       });
+      // Listen for Swap events
+      pool.on(
+        "Swap",
+        (_sender, amount0In, amount1In, amount0Out, amount1Out, _to) => {
+          console.log(
+            "VOW Swap event received:",
+            _sender,
+            amount0In,
+            amount1In,
+            amount0Out,
+            amount1Out,
+            _to
+          );
+          const vowAmountIn = Math.abs(Number(formatUnits(amount0In, 18)));
+          const usdtAmountIn = Math.abs(Number(formatUnits(amount1In, 6)));
+          const vowAmountOut = Math.abs(Number(formatUnits(amount0Out, 18)));
+          const usdtAmountOut = Math.abs(Number(formatUnits(amount1Out, 6)));
+          const newTransaction: Transaction = {
+            id: `${Date.now()}-${Math.random()}`,
+            type: amount0In.isZero() ? "BUY" : "SELL",
+            vowAmount: amount0In.isZero() ? vowAmountOut : vowAmountIn,
+            usdtAmount: amount0In.isZero() ? usdtAmountIn : usdtAmountOut,
+            timestamp: new Date().toISOString(),
+          };
+          console.log("New transaction:", newTransaction);
+
+          setTransactions((prevTx) => {
+            const updatedTx = [newTransaction, ...prevTx].slice(
+              0,
+              MAX_TRANSACTIONS
+            );
+            return updatedTx;
+          });
+        }
+      );
 
       // Periodic connection check
       const intervalId = setInterval(async () => {
@@ -179,6 +221,7 @@ export default function VowUsdcPrice() {
     <PriceDisplay
       title="VOW"
       price={price}
+      transactions={transactions}
       lastUpdate={lastUpdate}
       isConnected={isConnected}
       error={error}

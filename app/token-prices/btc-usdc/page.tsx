@@ -2,8 +2,13 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { Contract, WebSocketProvider, JsonRpcProvider } from "ethers";
-import { PriceDisplay } from "@/app/components/PriceDisplay";
+import {
+  Contract,
+  WebSocketProvider,
+  JsonRpcProvider,
+  formatUnits,
+} from "ethers";
+import { PriceDisplay } from "@/app/components/wbtc/PriceDisplay";
 
 // Uniswap V3 BTC/USDC Pool Contract (Ethereum Mainnet)
 const POOL_ADDRESS = "0x9Db9e0e53058C89e5B94e29621a205198648425B";
@@ -36,21 +41,30 @@ function calculatePrice(sqrtPriceX96: bigint): number {
 
   return price;
 }
+interface Transaction {
+  id: string;
+  type: "BUY" | "SELL";
+  wbtcAmount: number;
+  usdtAmount: number;
+  timestamp: string;
+}
 
 const RECONNECT_DELAY = 5000; // 5 seconds
+const MAX_TRANSACTIONS = 10; // Maximum number of transactions to store
 
 export default function WbtcUsdtPrice() {
   const [price, setPrice] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
   const [isConnected, setIsConnected] = useState(false);
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
 
   const fetchInitialPrice = async () => {
     try {
       console.log("Fetching initial price...");
-      const httpProvider = new JsonRpcProvider(
-        process.env.NEXT_PUBLIC_HTTP_RPC_URL || "https://your-http-url"
-      );
+      const response = await fetch("/api/rpc-url");
+      const { httpUrl } = await response.json();
+      const httpProvider = new JsonRpcProvider(httpUrl);
 
       // console.log("Created HTTP provider");
       const initialPool = new Contract(POOL_ADDRESS, POOL_ABI, httpProvider);
@@ -79,9 +93,9 @@ export default function WbtcUsdtPrice() {
 
     try {
       console.log("Setting up WebSocket connection...");
-      wsProvider = new WebSocketProvider(
-        process.env.NEXT_PUBLIC_WS_RPC_URL || "ws://your-websocket-url"
-      );
+      const response = await fetch("/api/rpc-url");
+      const { wsUrl } = await response.json();
+      wsProvider = new WebSocketProvider(wsUrl);
 
       // Monitor connection status through provider events
       wsProvider.on("network", (newNetwork, oldNetwork) => {
@@ -104,13 +118,34 @@ export default function WbtcUsdtPrice() {
       console.log("Contract instance created");
 
       // Listen for Swap events
-      pool.on("Swap", (...args) => {
-        // console.log("WBTC Swap event received:", args);
-        const sqrtPriceX96 = args[4];
+      pool.on("Swap", (_, __, amount0, amount1, sqrtPriceX96) => {
+        console.log(
+          "WBTC Swap event received:",
+          amount0,
+          amount1,
+          sqrtPriceX96
+        );
         const newPrice = calculatePrice(sqrtPriceX96);
-        // console.log("New WBTC price from swap:", newPrice);
+        console.log("New WBTC price from swap:", newPrice);
         setPrice(newPrice);
         setLastUpdate(new Date());
+        const wbtcAmount = Math.abs(Number(formatUnits(amount0, 8)));
+        const usdtAmount = Math.abs(Number(formatUnits(amount1, 6)));
+        const newTransaction: Transaction = {
+          id: `${Date.now()}-${Math.random()}`,
+          type: amount0 > 0n ? "BUY" : "SELL",
+          wbtcAmount,
+          usdtAmount,
+          timestamp: new Date().toISOString(),
+        };
+        console.log("New transaction:", newTransaction);
+        setTransactions((prevTx) => {
+          const updatedTx = [newTransaction, ...prevTx].slice(
+            0,
+            MAX_TRANSACTIONS
+          );
+          return updatedTx;
+        }); // Add this log
       });
 
       // Periodic connection check
@@ -180,6 +215,7 @@ export default function WbtcUsdtPrice() {
     <PriceDisplay
       title="Bitcoin"
       price={price}
+      transactions={transactions}
       lastUpdate={lastUpdate}
       isConnected={isConnected}
       error={error}

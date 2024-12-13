@@ -2,8 +2,14 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { Contract, WebSocketProvider, JsonRpcProvider } from "ethers";
-import { PriceDisplay } from "@/app/components/PriceDisplay";
+import {
+  Contract,
+  WebSocketProvider,
+  JsonRpcProvider,
+  formatEther,
+  formatUnits,
+} from "ethers";
+import { PriceDisplay } from "@/app/components/eth/PriceDisplay";
 
 // Uniswap V3 ETH/USDC Pool Contract (Ethereum)
 const POOL_ADDRESS = "0x88e6A0c2dDD26FEEb64F039a2c41296FcB3f5640";
@@ -36,21 +42,30 @@ function calculatePrice(sqrtPriceX96: bigint): number {
 
   return priceUsdcPerEth;
 }
-
+interface Transaction {
+  id: string;
+  type: "BUY" | "SELL";
+  ethAmount: number;
+  usdcAmount: number;
+  timestamp: string;
+}
 const RECONNECT_DELAY = 5000; // 5 seconds
+const MAX_TRANSACTIONS = 10; // Maximum number of transactions to store
 
 export default function EthUsdcPrice() {
   const [price, setPrice] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
   const [isConnected, setIsConnected] = useState(false);
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
 
   const fetchInitialPrice = async () => {
     try {
       console.log("Fetching initial price...");
-      const httpProvider = new JsonRpcProvider(
-        process.env.NEXT_PUBLIC_HTTP_RPC_URL || "https://your-http-url"
-      );
+
+      const response = await fetch("/api/rpc-url");
+      const { httpUrl } = await response.json();
+      const httpProvider = new JsonRpcProvider(httpUrl);
 
       // console.log("Created HTTP provider");
       const initialPool = new Contract(POOL_ADDRESS, POOL_ABI, httpProvider);
@@ -78,15 +93,14 @@ export default function EthUsdcPrice() {
     let pool: Contract | null = null;
 
     try {
-      console.log("Setting up WebSocket connection...");
-      wsProvider = new WebSocketProvider(
-        process.env.NEXT_PUBLIC_WS_RPC_URL || "ws://your-websocket-url"
-      );
-
+      console.log("Setting up ETH WebSocket connection...");
+      const response = await fetch("/api/rpc-url");
+      const { wsUrl } = await response.json();
+      wsProvider = new WebSocketProvider(wsUrl);
       // Monitor connection status through provider events
       wsProvider.on("network", (newNetwork, oldNetwork) => {
         if (!oldNetwork) {
-          console.log("WebSocket connected to network:", newNetwork.name);
+          console.log("ETH WebSocket connected to network:", newNetwork.name);
           setIsConnected(true);
           setError(null);
         }
@@ -104,13 +118,36 @@ export default function EthUsdcPrice() {
       console.log("Contract instance created");
 
       // Listen for Swap events
-      pool.on("Swap", (...args) => {
-        // console.log("ETH Swap event received:", args);
-        const sqrtPriceX96 = args[4];
+      pool.on("Swap", (_, __, amount0, amount1, sqrtPriceX96) => {
+        console.log(
+          "WETH Swap event received:",
+          amount0,
+          amount1,
+          sqrtPriceX96
+        );
         const newPrice = calculatePrice(sqrtPriceX96);
-        // console.log("New ETH price from swap:", newPrice);
+        console.log("New ETH price from swap:", newPrice);
         setPrice(newPrice);
         setLastUpdate(new Date());
+        // Process swap transaction
+        const ethAmount = Math.abs(Number(formatEther(amount1)));
+        const usdcAmount = Math.abs(Number(formatUnits(amount0, 6)));
+        const newTransaction: Transaction = {
+          id: `${Date.now()}-${Math.random()}`,
+          type: amount1 > 0n ? "SELL" : "BUY",
+          ethAmount,
+          usdcAmount,
+          timestamp: new Date().toISOString(),
+        };
+        console.log("New transaction:", newTransaction);
+
+        setTransactions((prevTx) => {
+          const updatedTx = [newTransaction, ...prevTx].slice(
+            0,
+            MAX_TRANSACTIONS
+          );
+          return updatedTx;
+        });
       });
 
       // Periodic connection check
@@ -180,6 +217,7 @@ export default function EthUsdcPrice() {
     <PriceDisplay
       title="Ethereum"
       price={price}
+      transactions={transactions}
       lastUpdate={lastUpdate}
       isConnected={isConnected}
       error={error}

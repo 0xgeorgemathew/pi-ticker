@@ -2,8 +2,13 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { Contract, WebSocketProvider, JsonRpcProvider } from "ethers";
-import { PriceDisplay } from "@/app/components/PriceDisplay";
+import {
+  Contract,
+  WebSocketProvider,
+  JsonRpcProvider,
+  formatUnits,
+} from "ethers";
+import { PriceDisplay } from "@/app/components/wld/PriceDisplay";
 
 // Uniswap V3 ETH/USDC Pool Contract (Ethereum)
 const POOL_ADDRESS = "0x610E319b3A3Ab56A0eD5562927D37c233774ba39";
@@ -16,8 +21,8 @@ const POOL_ABI = [
 
 // Helper function to calculate price from sqrtPriceX96
 function calculatePrice(sqrtPriceX96: bigint): number {
-  const decimalsToken0: number = 18; // USDC decimals
-  const decimalsToken1: number = 6; // ETH decimals
+  const decimalsToken0: number = 18; // WLD decimals
+  const decimalsToken1: number = 6; // USDC decimals
   const Q192 = 2n ** 192n;
 
   const numerator = sqrtPriceX96 * sqrtPriceX96;
@@ -36,22 +41,29 @@ function calculatePrice(sqrtPriceX96: bigint): number {
 
   return price;
 }
-
+interface Transaction {
+  id: string;
+  type: "BUY" | "SELL";
+  wldAmount: number;
+  usdcAmount: number;
+  timestamp: string;
+}
 const RECONNECT_DELAY = 5000; // 5 seconds
+const MAX_TRANSACTIONS = 10; // Maximum number of transactions to store
 
 export default function WldUsdcPrice() {
   const [price, setPrice] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
   const [isConnected, setIsConnected] = useState(false);
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
 
   const fetchInitialPrice = async () => {
     try {
       console.log("Fetching initial price...");
-      const httpProvider = new JsonRpcProvider(
-        process.env.NEXT_PUBLIC_HTTP_RPC_URL_WLD || "https://your-http-url"
-      );
-
+      const response = await fetch("/api/rpc-url");
+      const { httpUrlWld } = await response.json();
+      const httpProvider = new JsonRpcProvider(httpUrlWld);
       // console.log("Created HTTP provider");
       const initialPool = new Contract(POOL_ADDRESS, POOL_ABI, httpProvider);
 
@@ -79,9 +91,9 @@ export default function WldUsdcPrice() {
 
     try {
       console.log("Setting up WebSocket connection...");
-      wsProvider = new WebSocketProvider(
-        process.env.NEXT_PUBLIC_WS_RPC_URL_WLD || "ws://your-websocket-url"
-      );
+      const response = await fetch("/api/rpc-url");
+      const { wsurlWld } = await response.json();
+      wsProvider = new WebSocketProvider(wsurlWld);
 
       // Monitor connection status through provider events
       wsProvider.on("network", (newNetwork, oldNetwork) => {
@@ -104,13 +116,29 @@ export default function WldUsdcPrice() {
       console.log("Contract instance created");
 
       // Listen for Swap events
-      pool.on("Swap", (...args) => {
+      pool.on("Swap", (_, __, amount0, amount1, sqrtPriceX96) => {
         // console.log("WLD Swap event received:", args);
-        const sqrtPriceX96 = args[4];
         const newPrice = calculatePrice(sqrtPriceX96);
+
         // console.log("New WLD price from swap:", newPrice);
         setPrice(newPrice);
         setLastUpdate(new Date());
+        const wldAmount = Math.abs(Number(formatUnits(amount0, 18)));
+        const usdcAmount = Math.abs(Number(formatUnits(amount1, 6)));
+        const newTransaction: Transaction = {
+          id: `${Date.now()}-${Math.random()}`,
+          type: amount0 > 0n ? "SELL" : "BUY",
+          wldAmount,
+          usdcAmount,
+          timestamp: new Date().toISOString(),
+        };
+        setTransactions((prevTx) => {
+          const updatedTx = [newTransaction, ...prevTx].slice(
+            0,
+            MAX_TRANSACTIONS
+          );
+          return updatedTx;
+        });
       });
 
       // Periodic connection check
@@ -180,6 +208,7 @@ export default function WldUsdcPrice() {
     <PriceDisplay
       title="Worldcoin"
       price={price}
+      transactions={transactions}
       lastUpdate={lastUpdate}
       isConnected={isConnected}
       error={error}

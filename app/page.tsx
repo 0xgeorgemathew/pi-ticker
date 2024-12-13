@@ -16,8 +16,8 @@ export default function Home() {
   ];
 
   return (
-    <div className="min-h-screen w-full bg-black">
+    <main className="relative min-h-screen w-full bg-black overflow-hidden">
       <PriceSlider pages={pages} />
-    </div>
+    </main>
   );
 }

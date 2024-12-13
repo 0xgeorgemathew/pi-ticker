@@ -117,10 +117,15 @@ export default function WldUsdcPrice() {
 
       // Listen for Swap events
       pool.on("Swap", (_, __, amount0, amount1, sqrtPriceX96) => {
-        // console.log("WLD Swap event received:", args);
+        console.log(
+          "WLD-USDC Swap event received:",
+          amount0,
+          amount1,
+          sqrtPriceX96
+        );
         const newPrice = calculatePrice(sqrtPriceX96);
+        console.log("New WLD price from swap:", newPrice);
 
-        // console.log("New WLD price from swap:", newPrice);
         setPrice(newPrice);
         setLastUpdate(new Date());
         const wldAmount = Math.abs(Number(formatUnits(amount0, 18)));
@@ -132,6 +137,8 @@ export default function WldUsdcPrice() {
           usdcAmount,
           timestamp: new Date().toISOString(),
         };
+        console.log("New WLD transaction:", newTransaction);
+
         setTransactions((prevTx) => {
           const updatedTx = [newTransaction, ...prevTx].slice(
             0,

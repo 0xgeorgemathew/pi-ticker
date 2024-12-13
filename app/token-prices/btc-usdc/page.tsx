@@ -95,12 +95,13 @@ export default function WbtcUsdtPrice() {
       console.log("Setting up WebSocket connection...");
       const response = await fetch("/api/rpc-url");
       const { wsUrl } = await response.json();
+      console.log("WebSocket URL:", wsUrl);
       wsProvider = new WebSocketProvider(wsUrl);
 
       // Monitor connection status through provider events
       wsProvider.on("network", (newNetwork, oldNetwork) => {
         if (!oldNetwork) {
-          console.log("WebSocket connected to network:", newNetwork.name);
+          console.log("BTC WebSocket connected to network:", newNetwork.name);
           setIsConnected(true);
           setError(null);
         }
@@ -115,7 +116,7 @@ export default function WbtcUsdtPrice() {
 
       // Setup contract and event listening
       pool = new Contract(POOL_ADDRESS, POOL_ABI, wsProvider);
-      console.log("Contract instance created");
+      console.log("BTC Contract instance created");
 
       // Listen for Swap events
       pool.on("Swap", (_, __, amount0, amount1, sqrtPriceX96) => {
@@ -133,12 +134,12 @@ export default function WbtcUsdtPrice() {
         const usdtAmount = Math.abs(Number(formatUnits(amount1, 6)));
         const newTransaction: Transaction = {
           id: `${Date.now()}-${Math.random()}`,
-          type: amount0 > 0n ? "BUY" : "SELL",
+          type: amount0 > 0n ? "SELL" : "BUY",
           wbtcAmount,
           usdtAmount,
           timestamp: new Date().toISOString(),
         };
-        console.log("New transaction:", newTransaction);
+        console.log("New BTC transaction:", newTransaction);
         setTransactions((prevTx) => {
           const updatedTx = [newTransaction, ...prevTx].slice(
             0,

@@ -96,6 +96,8 @@ export default function EthUsdcPrice() {
       console.log("Setting up ETH WebSocket connection...");
       const response = await fetch("/api/rpc-url");
       const { wsUrl } = await response.json();
+      console.log("WebSocket URL:", wsUrl);
+
       wsProvider = new WebSocketProvider(wsUrl);
       // Monitor connection status through provider events
       wsProvider.on("network", (newNetwork, oldNetwork) => {
@@ -115,7 +117,7 @@ export default function EthUsdcPrice() {
 
       // Setup contract and event listening
       pool = new Contract(POOL_ADDRESS, POOL_ABI, wsProvider);
-      console.log("Contract instance created");
+      console.log("ETH Contract instance created");
 
       // Listen for Swap events
       pool.on("Swap", (_, __, amount0, amount1, sqrtPriceX96) => {
@@ -139,7 +141,7 @@ export default function EthUsdcPrice() {
           usdcAmount,
           timestamp: new Date().toISOString(),
         };
-        console.log("New transaction:", newTransaction);
+        console.log("New ETH transaction:", newTransaction);
 
         setTransactions((prevTx) => {
           const updatedTx = [newTransaction, ...prevTx].slice(

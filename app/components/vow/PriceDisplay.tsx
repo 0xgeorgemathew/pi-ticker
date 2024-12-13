@@ -158,11 +158,11 @@ export const PriceDisplay = ({
                       >
                         {tx.type}
                       </TableCell>
-                      <TableCell className="text-white font-medium">
-                        {tx.vowAmount.toFixed(4)} VOW
+                      <TableCell className="text-white font-bold text-lg">
+                        {tx.vowAmount.toFixed(4)}
                       </TableCell>
-                      <TableCell className="text-white font-medium">
-                        ${tx.usdtAmount.toFixed(2)} USDT
+                      <TableCell className="text-white font-bold text-lg">
+                        ${tx.usdtAmount.toFixed(2)}
                       </TableCell>
                       <TableCell className="text-white font-medium text-right">
                         {new Date(tx.timestamp).toLocaleTimeString()}
